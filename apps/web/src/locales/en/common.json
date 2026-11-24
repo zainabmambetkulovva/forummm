@@ -1,0 +1,82 @@
+{
+  "site": {
+    "name": "FORUM.KG",
+    "tagline": "Platform for selling tickets to forums and events"
+  },
+  "nav": {
+    "home": "Home",
+    "forums": "Forums",
+    "account": "Account",
+    "admin": "Admin",
+    "login": "Login",
+    "logout": "Logout",
+    "register": "Register"
+  },
+  "common": {
+    "search": "Search",
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success",
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "create": "Create",
+    "back": "Back",
+    "next": "Next",
+    "submit": "Submit",
+    "close": "Close",
+    "viewDetails": "View Details"
+  },
+  "footer": {
+    "rights": "All rights reserved",
+    "about": "About",
+    "contact": "Contact",
+    "privacy": "Privacy Policy",
+    "terms": "Terms of Service"
+  },
+  "hero": {
+    "title": "Join the best forums in Kyrgyzstan",
+    "subtitle": "Buy tickets online and receive them on Telegram",
+    "viewForums": "View Forums"
+  },
+  "forum": {
+    "upcoming": "Upcoming Forums",
+    "date": "Date",
+    "location": "Location",
+    "capacity": "Capacity",
+    "available": "Available",
+    "soldOut": "Sold Out",
+    "from": "from",
+    "buyTicket": "Buy Ticket",
+    "categories": "Ticket Categories",
+    "standard": "Standard",
+    "vip": "VIP"
+  },
+  "auth": {
+    "signIn": "Sign In",
+    "signInWith": "Sign in with",
+    "signInWithGoogle": "Sign in with Google",
+    "signInWithPhone": "Sign in with phone",
+    "phone": "Phone number",
+    "code": "Verification code",
+    "sendCode": "Send code",
+    "verify": "Verify",
+    "firstName": "First name",
+    "lastName": "Last name",
+    "email": "Email",
+    "completeProfile": "Complete your profile"
+  },
+  "ticket": {
+    "myTickets": "My Tickets",
+    "ticketNumber": "Ticket Number",
+    "participant": "Participant",
+    "category": "Category",
+    "status": "Status",
+    "qrCode": "QR Code",
+    "expiresAt": "Expires at",
+    "active": "Active",
+    "used": "Used",
+    "cancelled": "Cancelled"
+  }
+}

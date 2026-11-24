@@ -1,0 +1,82 @@
+// Enums
+export * from './enums';
+
+// Entity Types
+export * from './entities/user.types';
+export * from './entities/forum.types';
+export * from './entities/order.types';
+export * from './entities/ticket.types';
+
+// DTOs
+export * from './dtos/auth.dto';
+export * from './dtos/forum.dto';
+export * from './dtos/order.dto';
+
+// Validators & Helpers
+export * from './validators';
+
+// Constants
+export const SUPPORTED_LOCALES = ['ru', 'ky', 'en'] as const;
+export const DEFAULT_LOCALE = 'ru';
+export const DEFAULT_TIMEZONE = 'Asia/Bishkek';
+export const DEFAULT_CURRENCY = 'KGS';
+
+// Business Rules
+export const BUSINESS_RULES = {
+  DEFAULT_MAX_TICKETS_PER_ACCOUNT: 1,
+  DEFAULT_RESERVATION_TIMEOUT_MINUTES: 10,
+  OTP_CODE_LENGTH: 6,
+  OTP_EXPIRY_MINUTES: 5,
+  OTP_MAX_ATTEMPTS: 3,
+  MIN_TICKET_PRICE: 0,
+  MAX_TICKETS_PER_ORDER: 10,
+} as const;
+
+// Error Codes
+export enum ErrorCode {
+  // Authentication
+  INVALID_CREDENTIALS = 'INVALID_CREDENTIALS',
+  PHONE_NOT_VERIFIED = 'PHONE_NOT_VERIFIED',
+  OTP_EXPIRED = 'OTP_EXPIRED',
+  OTP_INVALID = 'OTP_INVALID',
+  OTP_MAX_ATTEMPTS = 'OTP_MAX_ATTEMPTS',
+
+  // Authorization
+  UNAUTHORIZED = 'UNAUTHORIZED',
+  FORBIDDEN = 'FORBIDDEN',
+  INSUFFICIENT_PERMISSIONS = 'INSUFFICIENT_PERMISSIONS',
+
+  // Forum & Tickets
+  FORUM_NOT_FOUND = 'FORUM_NOT_FOUND',
+  FORUM_NOT_PUBLISHED = 'FORUM_NOT_PUBLISHED',
+  FORUM_SOLD_OUT = 'FORUM_SOLD_OUT',
+  CATEGORY_NOT_FOUND = 'CATEGORY_NOT_FOUND',
+  CATEGORY_SOLD_OUT = 'CATEGORY_SOLD_OUT',
+  TICKET_LIMIT_EXCEEDED = 'TICKET_LIMIT_EXCEEDED',
+  CAPACITY_EXCEEDED = 'CAPACITY_EXCEEDED',
+
+  // Orders
+  ORDER_NOT_FOUND = 'ORDER_NOT_FOUND',
+  ORDER_EXPIRED = 'ORDER_EXPIRED',
+  ORDER_ALREADY_PAID = 'ORDER_ALREADY_PAID',
+
+  // Tickets
+  TICKET_NOT_FOUND = 'TICKET_NOT_FOUND',
+  TICKET_ALREADY_USED = 'TICKET_ALREADY_USED',
+  TICKET_CANCELLED = 'TICKET_CANCELLED',
+  TICKET_EXPIRED = 'TICKET_EXPIRED',
+  INVALID_QR_TOKEN = 'INVALID_QR_TOKEN',
+
+  // Payments
+  PAYMENT_FAILED = 'PAYMENT_FAILED',
+  PAYMENT_VERIFICATION_FAILED = 'PAYMENT_VERIFICATION_FAILED',
+  INVALID_AMOUNT = 'INVALID_AMOUNT',
+
+  // Validation
+  VALIDATION_ERROR = 'VALIDATION_ERROR',
+  INVALID_INPUT = 'INVALID_INPUT',
+
+  // System
+  INTERNAL_ERROR = 'INTERNAL_ERROR',
+  SERVICE_UNAVAILABLE = 'SERVICE_UNAVAILABLE',
+}

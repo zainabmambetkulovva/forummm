@@ -1,0 +1,630 @@
+// FORUM.KG database schema (Prisma ORM v7, Neon PostgreSQL)
+// Monetary values are integer minor units: 1 KGS = 100 tyiyn.
+// Store all timestamps as UTC; render forum dates in Forum.timeZone.
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+  previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Locale {
+  RU
+  KY
+  EN
+}
+
+enum UserRole {
+  USER
+  SCANNER
+  MANAGER
+  SUPER_ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum AuthProvider {
+  GOOGLE
+}
+
+enum OtpPurpose {
+  LOGIN
+  VERIFY_PHONE
+  CHANGE_PHONE
+}
+
+enum ForumStatus {
+  DRAFT
+  SCHEDULED
+  PUBLISHED
+  COMPLETED
+  CANCELLED
+}
+
+enum OrderStatus {
+  PENDING_PAYMENT
+  PAID
+  PARTIALLY_CANCELLED
+  CANCELLED
+  EXPIRED
+  PAYMENT_FAILED
+}
+
+enum PaymentProvider {
+  FINIK
+}
+
+enum PaymentStatus {
+  CREATED
+  PENDING
+  PROCESSING
+  SUCCEEDED
+  FAILED
+  EXPIRED
+  REFUND_PENDING
+  PARTIALLY_REFUNDED
+  REFUNDED
+}
+
+enum WebhookEventStatus {
+  RECEIVED
+  PROCESSED
+  IGNORED
+  FAILED
+}
+
+enum TicketStatus {
+  ACTIVE
+  USED
+  CANCELLED
+  // Expiration is calculated: expiresAt <= current server time.
+}
+
+enum CheckInMethod {
+  QR_ONLINE
+  MANUAL_RECONCILED
+}
+
+enum CancellationStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  COMPLETED
+}
+
+enum RefundMethod {
+  FINIK
+  MANUAL
+}
+
+enum RefundStatus {
+  PENDING
+  PROCESSING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+enum NotificationType {
+  FORUM_PUBLISHED
+  FORUM_UPDATED
+  FORUM_CANCELLED
+  EVENT_REMINDER
+  PAYMENT_SUCCEEDED
+  TICKETS_ISSUED
+  CANCELLATION_UPDATED
+}
+
+enum NotificationChannel {
+  TELEGRAM
+  WEB_PUSH
+}
+
+enum DeliveryStatus {
+  PENDING
+  SENT
+  RETRYING
+  FAILED
+  SKIPPED
+}
+
+enum OfflineAdmissionStatus {
+  PROVISIONAL
+  VERIFIED
+  REJECTED
+  DUPLICATE
+}
+
+enum IntegrationProvider {
+  GOOGLE
+  SMS
+  FINIK
+  TELEGRAM
+  WEB_PUSH
+  AI
+}
+
+enum IntegrationState {
+  NOT_CONFIGURED
+  HEALTHY
+  DEGRADED
+  ERROR
+}
+
+model User {
+  id                            String               @id @default(uuid()) @db.Uuid
+  firstName                     String?              @db.VarChar(100)
+  lastName                      String?              @db.VarChar(100)
+  phone                         String?              @unique @db.VarChar(20) // Normalize to E.164
+  phoneVerifiedAt               DateTime?
+  email                         String?              @unique @db.VarChar(255) // Normalize to lowercase
+  role                          UserRole             @default(USER)
+  status                        UserStatus           @default(ACTIVE)
+  preferredLocale               Locale               @default(RU)
+  announcementsPushEnabled      Boolean              @default(true)
+  createdAt                     DateTime             @default(now())
+  updatedAt                     DateTime             @updatedAt
+
+  authIdentities                AuthIdentity[]
+  telegramConnection            TelegramConnection?
+  pushSubscriptions             PushSubscription[]
+  createdForums                 Forum[]              @relation("ForumCreator")
+  orders                        Order[]
+  purchasedTickets              Ticket[]             @relation("TicketBuyer")
+  performedCheckIns             CheckIn[]            @relation("CheckInOperator")
+  cancellationRequests          CancellationRequest[] @relation("CancellationRequester")
+  reviewedCancellationRequests  CancellationRequest[] @relation("CancellationReviewer")
+  notifications                 Notification[]
+  offlineAdmissions             OfflineAdmission[]   @relation("OfflineAdmissionOperator")
+  auditLogs                     AuditLog[]           @relation("AuditActor")
+
+  @@index([createdAt])
+  @@index([role, status])
+}
+
+model AuthIdentity {
+  id              String       @id @default(uuid()) @db.Uuid
+  userId          String       @db.Uuid
+  provider        AuthProvider
+  providerSubject String       @db.VarChar(255)
+  providerEmail   String?      @db.VarChar(255)
+  linkedAt        DateTime     @default(now())
+
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerSubject])
+  @@unique([userId, provider])
+}
+
+model OtpChallenge {
+  id          String     @id @default(uuid()) @db.Uuid
+  phone       String     @db.VarChar(20)
+  purpose     OtpPurpose
+  codeHash    String     @db.VarChar(255) // Never store raw OTP codes
+  attempts    Int        @default(0)
+  expiresAt   DateTime
+  consumedAt  DateTime?
+  createdAt   DateTime   @default(now())
+
+  @@index([phone, purpose, createdAt])
+  @@index([expiresAt])
+}
+
+model TelegramConnection {
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String    @unique @db.Uuid
+  chatId       String    @unique @db.VarChar(64)
+  connectedAt  DateTime  @default(now())
+  disconnectedAt DateTime?
+
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model PushSubscription {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @db.Uuid
+  endpoint    String   @db.Text
+  endpointHash String   @unique @db.VarChar(64) // SHA-256 of endpoint for safe indexing
+  p256dh      String   @db.Text
+  auth        String   @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deliveries  NotificationDelivery[]
+
+  @@index([userId])
+}
+
+model Forum {
+  id                   String       @id @default(uuid()) @db.Uuid
+  slug                 String       @unique @db.VarChar(180)
+  status               ForumStatus  @default(DRAFT)
+  bannerUrl            String?      @db.Text
+  venueName            String?      @db.VarChar(255)
+  venueAddress         String?      @db.Text
+  timeZone             String       @default("Asia/Bishkek") @db.VarChar(64)
+  startsAt             DateTime
+  endsAt               DateTime?
+  qrExpiresAt          DateTime
+  capacity             Int
+  maxTicketsPerAccount Int          @default(1)
+  publishAt            DateTime?
+  publishedAt          DateTime?
+  createdById          String       @db.Uuid
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+
+  createdBy            User         @relation("ForumCreator", fields: [createdById], references: [id])
+  translations         ForumTranslation[]
+  categories           TicketCategory[]
+  orders               Order[]
+  tickets              Ticket[]
+  checkIns             CheckIn[]
+  offlineAdmissions    OfflineAdmission[]
+  notifications        Notification[]
+
+  @@index([status, startsAt])
+  @@index([publishAt])
+  @@index([createdById])
+}
+
+model ForumTranslation {
+  id               String   @id @default(uuid()) @db.Uuid
+  forumId          String   @db.Uuid
+  locale           Locale
+  title            String   @db.VarChar(255)
+  shortDescription String?  @db.Text
+  description      String?  @db.Text
+  program          String?  @db.Text
+
+  forum            Forum    @relation(fields: [forumId], references: [id], onDelete: Cascade)
+
+  @@unique([forumId, locale])
+}
+
+model TicketCategory {
+  id            String    @id @default(uuid()) @db.Uuid
+  forumId       String    @db.Uuid
+  code          String    @db.VarChar(40) // e.g., STANDARD, VIP
+  priceMinor    Int       // KGS tyiyn
+  currency      String    @default("KGS") @db.VarChar(3)
+  capacity      Int?      // NULL means limited only by forum capacity
+  isActive      Boolean   @default(true)
+  sortOrder     Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  forum         Forum     @relation(fields: [forumId], references: [id], onDelete: Cascade)
+  translations  TicketCategoryTranslation[]
+  orderItems    OrderItem[]
+
+  @@unique([forumId, code])
+  @@index([forumId, isActive])
+}
+
+model TicketCategoryTranslation {
+  id         String         @id @default(uuid()) @db.Uuid
+  categoryId String         @db.Uuid
+  locale     Locale
+  name       String         @db.VarChar(100)
+  description String?       @db.Text
+
+  category   TicketCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([categoryId, locale])
+}
+
+model Order {
+  id               String       @id @default(uuid()) @db.Uuid
+  orderNumber      String       @unique @db.VarChar(40)
+  userId           String       @db.Uuid
+  forumId          String       @db.Uuid
+  status           OrderStatus  @default(PENDING_PAYMENT)
+  subtotalMinor    Int
+  totalMinor       Int
+  currency         String       @default("KGS") @db.VarChar(3)
+  reservedUntil    DateTime?
+  paidAt           DateTime?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  user             User         @relation(fields: [userId], references: [id])
+  forum            Forum        @relation(fields: [forumId], references: [id])
+  items            OrderItem[]
+  payments         Payment[]
+  cancellations    CancellationRequest[]
+  refunds          Refund[]
+  notifications    Notification[]
+
+  @@index([userId, createdAt])
+  @@index([forumId, status, reservedUntil])
+  @@index([status, createdAt])
+}
+
+model OrderItem {
+  id                    String         @id @default(uuid()) @db.Uuid
+  orderId               String         @db.Uuid
+  ticketCategoryId      String         @db.Uuid
+  participantFirstName  String         @db.VarChar(100)
+  participantLastName   String         @db.VarChar(100)
+  unitPriceMinor        Int            // Immutable price at checkout
+  createdAt             DateTime       @default(now())
+
+  order                 Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  ticketCategory        TicketCategory @relation(fields: [ticketCategoryId], references: [id])
+  ticket                Ticket?
+
+  @@index([orderId])
+  @@index([ticketCategoryId])
+}
+
+model Payment {
+  id                String         @id @default(uuid()) @db.Uuid
+  orderId           String         @db.Uuid
+  provider          PaymentProvider @default(FINIK)
+  providerPaymentId String?        @unique @db.VarChar(255)
+  status            PaymentStatus  @default(CREATED)
+  amountMinor       Int
+  currency          String         @default("KGS") @db.VarChar(3)
+  paidAt            DateTime?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  order             Order          @relation(fields: [orderId], references: [id])
+  webhookEvents     PaymentWebhookEvent[]
+  refunds           Refund[]
+
+  @@index([orderId, status])
+  @@index([paidAt])
+  @@index([createdAt])
+}
+
+model PaymentWebhookEvent {
+  id                String             @id @default(uuid()) @db.Uuid
+  provider          PaymentProvider
+  dedupeKey         String             @unique @db.VarChar(255)
+  providerEventId   String?            @db.VarChar(255)
+  paymentId         String?            @db.Uuid
+  payloadDigest     String             @db.VarChar(128)
+  eventType         String             @db.VarChar(100)
+  status            WebhookEventStatus @default(RECEIVED)
+  receivedAt        DateTime           @default(now())
+  processedAt       DateTime?
+  errorMessage      String?            @db.Text
+
+  payment           Payment?           @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+
+  @@index([paymentId, receivedAt])
+  @@index([provider, providerEventId])
+}
+
+model Ticket {
+  id                 String         @id @default(uuid()) @db.Uuid
+  ticketNumber       String         @unique @db.VarChar(50)
+  orderItemId        String         @unique @db.Uuid
+  forumId            String         @db.Uuid
+  buyerId            String         @db.Uuid
+  status             TicketStatus   @default(ACTIVE)
+  qrTokenHash        String         @unique @db.VarChar(128) // Hash for verification
+  qrTokenEncrypted   String         @db.Text // Encrypted token for QR re-delivery
+  issuedAt           DateTime       @default(now())
+  expiresAt          DateTime       // Snapshot of Forum.qrExpiresAt at issue time
+  usedAt             DateTime?
+  cancelledAt        DateTime?
+
+  orderItem          OrderItem      @relation(fields: [orderItemId], references: [id])
+  forum              Forum          @relation(fields: [forumId], references: [id])
+  buyer              User           @relation("TicketBuyer", fields: [buyerId], references: [id])
+  checkIn            CheckIn?
+  cancellationRequests CancellationRequest[]
+  offlineAdmissions  OfflineAdmission[]
+  refunds            Refund[]
+
+  @@index([buyerId, issuedAt])
+  @@index([forumId, status])
+  @@index([expiresAt])
+}
+
+model CheckIn {
+  id           String        @id @default(uuid()) @db.Uuid
+  ticketId     String        @unique @db.Uuid // Database-level single-use protection
+  forumId      String        @db.Uuid
+  operatorId   String        @db.Uuid
+  method       CheckInMethod @default(QR_ONLINE)
+  checkedInAt  DateTime      @default(now())
+
+  ticket       Ticket        @relation(fields: [ticketId], references: [id])
+  forum        Forum         @relation(fields: [forumId], references: [id])
+  operator     User          @relation("CheckInOperator", fields: [operatorId], references: [id])
+
+  @@index([forumId, checkedInAt])
+  @@index([operatorId, checkedInAt])
+}
+
+model CancellationRequest {
+  id           String             @id @default(uuid()) @db.Uuid
+  orderId      String             @db.Uuid
+  ticketId     String?            @db.Uuid // NULL = whole order; subject to policy
+  requesterId  String             @db.Uuid
+  reviewedById String?            @db.Uuid
+  status       CancellationStatus @default(SUBMITTED)
+  reason       String?            @db.Text
+  adminNote    String?            @db.Text
+  createdAt    DateTime           @default(now())
+  reviewedAt   DateTime?
+  completedAt  DateTime?
+
+  order        Order              @relation(fields: [orderId], references: [id])
+  ticket       Ticket?            @relation(fields: [ticketId], references: [id])
+  requester    User               @relation("CancellationRequester", fields: [requesterId], references: [id])
+  reviewedBy   User?              @relation("CancellationReviewer", fields: [reviewedById], references: [id])
+
+  @@index([status, createdAt])
+  @@index([requesterId, createdAt])
+  @@index([orderId])
+}
+
+model Refund {
+  id               String        @id @default(uuid()) @db.Uuid
+  orderId          String        @db.Uuid
+  paymentId        String        @db.Uuid
+  ticketId         String?       @db.Uuid
+  providerRefundId String?       @unique @db.VarChar(255)
+  method           RefundMethod
+  status           RefundStatus  @default(PENDING)
+  amountMinor      Int
+  currency         String        @default("KGS") @db.VarChar(3)
+  reason           String?       @db.Text
+  createdAt        DateTime      @default(now())
+  completedAt      DateTime?
+
+  order            Order         @relation(fields: [orderId], references: [id])
+  payment          Payment       @relation(fields: [paymentId], references: [id])
+  ticket           Ticket?       @relation(fields: [ticketId], references: [id])
+
+  @@index([paymentId, status])
+  @@index([orderId])
+}
+
+model Notification {
+  id             String           @id @default(uuid()) @db.Uuid
+  userId         String           @db.Uuid
+  forumId        String?          @db.Uuid
+  orderId        String?          @db.Uuid
+  type           NotificationType
+  locale         Locale           @default(RU)
+  title          String           @db.VarChar(255)
+  body           String           @db.Text
+  readAt         DateTime?
+  createdAt      DateTime         @default(now())
+
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  forum          Forum?           @relation(fields: [forumId], references: [id])
+  order          Order?           @relation(fields: [orderId], references: [id])
+  deliveries     NotificationDelivery[]
+
+  @@index([userId, readAt, createdAt])
+  @@index([forumId, type])
+}
+
+model NotificationDelivery {
+  id                 String              @id @default(uuid()) @db.Uuid
+  notificationId     String              @db.Uuid
+  pushSubscriptionId String?             @db.Uuid
+  deliveryKey        String              @unique @db.VarChar(255)
+  channel            NotificationChannel
+  status             DeliveryStatus      @default(PENDING)
+  attemptCount       Int                 @default(0)
+  lastError          String?             @db.Text
+  nextAttemptAt      DateTime?
+  deliveredAt        DateTime?
+  createdAt          DateTime            @default(now())
+
+  notification       Notification        @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  pushSubscription   PushSubscription?   @relation(fields: [pushSubscriptionId], references: [id], onDelete: SetNull)
+
+  @@index([status, nextAttemptAt])
+  @@index([notificationId])
+}
+
+model OfflineAdmission {
+  id                 String                 @id @default(uuid()) @db.Uuid
+  forumId            String                 @db.Uuid
+  ticketId           String?                @db.Uuid
+  operatorId         String                 @db.Uuid
+  participantName    String                 @db.VarChar(255)
+  receiptReference   String?                @db.VarChar(255)
+  paymentApplication String?                @db.VarChar(100)
+  status             OfflineAdmissionStatus @default(PROVISIONAL)
+  observedAt         DateTime
+  reconciledAt       DateTime?
+  note               String?                @db.Text
+  createdAt          DateTime               @default(now())
+
+  forum              Forum                  @relation(fields: [forumId], references: [id])
+  ticket             Ticket?                @relation(fields: [ticketId], references: [id])
+  operator           User                   @relation("OfflineAdmissionOperator", fields: [operatorId], references: [id])
+
+  @@index([forumId, status])
+  @@index([receiptReference])
+  @@index([operatorId, observedAt])
+}
+
+model SiteSettings {
+  id               String                    @id @default("main") @db.VarChar(30)
+  displayName      String                    @default("FORUM.KG") @db.VarChar(120)
+  logoUrl          String?                   @db.Text
+  heroImageUrl     String?                   @db.Text
+  primaryColorHex  String                    @default("#2563EB") @db.VarChar(7)
+  accentColorHex   String                    @default("#10B981") @db.VarChar(7)
+  contactPhone     String?                   @db.VarChar(30)
+  contactEmail     String?                   @db.VarChar(255)
+  updatedAt        DateTime                  @updatedAt
+
+  translations     SiteSettingsTranslation[]
+  socialLinks      SocialLink[]
+}
+
+model SiteSettingsTranslation {
+  id            String        @id @default(uuid()) @db.Uuid
+  siteId        String        @db.VarChar(30)
+  locale        Locale
+  heroTitle     String?       @db.VarChar(255)
+  heroSubtitle  String?       @db.Text
+  aboutText     String?       @db.Text
+
+  settings      SiteSettings  @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@unique([siteId, locale])
+}
+
+model SocialLink {
+  id          String        @id @default(uuid()) @db.Uuid
+  siteId      String        @db.VarChar(30)
+  platform    String        @db.VarChar(60)
+  url         String        @db.Text
+  sortOrder   Int           @default(0)
+  isActive    Boolean       @default(true)
+
+  settings    SiteSettings  @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@index([siteId, sortOrder])
+}
+
+model IntegrationHealth {
+  provider          IntegrationProvider @id
+  state             IntegrationState    @default(NOT_CONFIGURED)
+  lastCheckedAt     DateTime?
+  lastSuccessAt     DateTime?
+  lastError         String?             @db.Text
+  troubleshooting   String?             @db.Text
+  updatedAt         DateTime            @updatedAt
+  // Do NOT store API keys, tokens, or passwords in this table.
+}
+
+model AuditLog {
+  id          String    @id @default(uuid()) @db.Uuid
+  actorId     String?   @db.Uuid
+  action      String    @db.VarChar(120)
+  targetType  String    @db.VarChar(120)
+  targetId    String?   @db.VarChar(120)
+  metadata    Json?
+  createdAt   DateTime  @default(now())
+
+  actor       User?     @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([actorId, createdAt])
+  @@index([targetType, targetId])
+  @@index([createdAt])
+}

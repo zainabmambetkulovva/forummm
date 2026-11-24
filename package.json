@@ -1,0 +1,48 @@
+{
+  "name": "forum-kg",
+  "version": "1.0.0",
+  "private": true,
+  "description": "FORUM.KG - Platform for forum tickets and event management",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "pnpm --filter \"./apps/**\" dev",
+    "dev:web": "pnpm --filter web dev",
+    "dev:api": "pnpm --filter api start:dev",
+    "build": "pnpm --filter \"./apps/**\" build",
+    "build:web": "pnpm --filter web build",
+    "build:api": "pnpm --filter api build",
+    "lint": "pnpm --filter \"./apps/**\" lint",
+    "format": "prettier --write \"**/*.{ts,tsx,md,json}\"",
+    "clean": "pnpm --filter \"./apps/**\" clean && pnpm --filter \"./packages/**\" clean",
+    "db:generate": "cd prisma && prisma generate",
+    "db:push": "cd prisma && prisma db push",
+    "db:migrate": "cd prisma && prisma migrate dev",
+    "db:migrate:deploy": "cd prisma && prisma migrate deploy",
+    "db:seed": "cd prisma && ts-node seed.ts",
+    "db:studio": "cd prisma && prisma studio",
+    "db:reset": "cd prisma && prisma migrate reset"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "prettier": "^3.2.4",
+    "typescript": "^5.3.3",
+    "ts-node": "^10.9.2",
+    "@types/bcrypt": "^5.0.2",
+    "prisma": "^5.8.1"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.8.1",
+    "bcrypt": "^5.1.1"
+  },
+  "packageManager": "pnpm@8.15.0",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=8.0.0"
+  },
+  "prisma": {
+    "seed": "ts-node prisma/seed.ts"
+  }
+}

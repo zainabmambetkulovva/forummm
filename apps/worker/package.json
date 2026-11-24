@@ -1,0 +1,30 @@
+{
+  "name": "worker",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/main.js",
+    "start:dev": "ts-node src/main.ts",
+    "dev": "nodemon --watch src --exec ts-node src/main.ts",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.8.1",
+    "@prisma/adapter-neon": "^5.8.1",
+    "bullmq": "^5.1.9",
+    "redis": "^4.6.12",
+    "axios": "^1.6.5",
+    "dotenv": "^16.3.1",
+    "telegraf": "^4.15.6",
+    "web-push": "^3.6.6",
+    "shared-types": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/web-push": "^3.6.3",
+    "typescript": "^5.3.3",
+    "ts-node": "^10.9.2",
+    "nodemon": "^3.0.3"
+  }
+}
